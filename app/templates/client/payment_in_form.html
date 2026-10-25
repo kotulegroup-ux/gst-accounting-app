@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}{% if payment %}Edit Payment Received{% else %}Record Payment Received (Debtor){% endif %}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">
+                {% if payment %}Edit Payment Received{% else %}Record Payment Received (Receipt){% endif %}
+            </h1>
+            <p class="text-xs text-slate-500 mt-0.5">Recording funds collected from customer / debtor into {{ active_client.business_name }}</p>
+        </div>
+        <a href="/payments/in" class="text-xs text-slate-500 hover:text-slate-800 font-semibold">
+            <i class="fa-solid fa-arrow-left mr-1"></i> Cancel
+        </a>
+    </div>
+
+    <!-- Main Card -->
+    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <form method="POST" action="{% if payment %}/payments/{{ payment.id }}/edit{% else %}/payments/in/new{% endif %}" class="space-y-4">
+            <input type="hidden" name="payment_type" value="received">
+
+            <!-- Customer -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Customer (Debtor) <span class="text-rose-500">*</span>
+                </label>
+                <select name="party_id" required class="w-full text-sm bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    <option value="">-- Choose Customer --</option>
+                    {% for p in parties %}
+                    <option value="{{ p.id }}" {% if payment and payment.party_id == p.id %}selected{% endif %}>
+                        {{ p.name }} {% if p.phone %}(Phone: {{ p.phone }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Date & Amount in 2 cols -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Receipt Date <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="date" name="payment_date" required 
+                        value="{% if payment %}{{ payment.payment_date }}{% else %}{{ today_date }}{% endif %}"
+                        class="w-full text-sm bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Amount Received (₹) <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="number" step="0.01" min="0.01" name="amount" required placeholder="0.00"
+                        value="{% if payment %}{{ payment.amount }}{% endif %}"
+                        class="w-full text-sm font-mono font-bold text-emerald-800 bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+            </div>
+
+            <!-- Mode & Reference No -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Payment Mode <span class="text-rose-500">*</span>
+                    </label>
+                    <select name="payment_mode" class="w-full text-sm bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                        <option value="Bank" {% if payment and payment.payment_mode == 'Bank' %}selected{% endif %}>Bank Transfer / NEFT / RTGS</option>
+                        <option value="UPI" {% if payment and payment.payment_mode == 'UPI' %}selected{% endif %}>UPI / QR Code</option>
+                        <option value="Cash" {% if payment and payment.payment_mode == 'Cash' %}selected{% endif %}>Cash</option>
+                        <option value="Cheque" {% if payment and payment.payment_mode == 'Cheque' %}selected{% endif %}>Cheque</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Reference / UTR / Cheque No.
+                    </label>
+                    <input type="text" name="reference_no" placeholder="e.g. UTR12345678"
+                        value="{% if payment %}{{ payment.reference_no or '' }}{% endif %}"
+                        class="w-full text-sm font-mono bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+            </div>
+
+            <!-- Remarks -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Remarks / Description
+                </label>
+                <textarea name="remarks" rows="2" placeholder="e.g. Received via GPay against invoice STC/26-27/001"
+                    class="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">{% if payment %}{{ payment.remarks or '' }}{% endif %}</textarea>
+            </div>
+
+            <!-- Submit -->
+            <div class="pt-4 flex items-center justify-end space-x-3 border-t border-slate-100">
+                <a href="/payments/in" class="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50">Cancel</a>
+                <button type="submit" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md flex items-center space-x-1.5">
+                    <i class="fa-solid fa-check"></i>
+                    <span>{% if payment %}Update Payment Receipt{% else %}Save Payment Receipt{% endif %}</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+
+{% block title %}{% if invoice %}Edit Invoice {{ invoice.invoice_number }}{% else %}New Sales Invoice{% endif %}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">
+                {% if invoice %}Edit Sales Tax Invoice: <span class="font-mono text-blue-600">{{ invoice.invoice_number }}</span>{% else %}Create New Sales Tax Invoice{% endif %}
+            </h1>
+            <p class="text-xs text-slate-500 mt-0.5">Recording outward supply for {{ active_client.business_name }} (State: {{ active_client.state_name }} - {{ active_client.state_code }})</p>
+        </div>
+        <a href="/sales" class="text-xs text-slate-500 hover:text-slate-800 font-semibold">
+            <i class="fa-solid fa-arrow-left mr-1"></i> Cancel
+        </a>
+    </div>
+
+    <!-- Main Form -->
+    <form method="POST" id="invoiceForm" action="{% if invoice %}/sales/{{ invoice.id }}/edit{% else %}/sales/new{% endif %}" class="space-y-6">
+        
+        <!-- Meta Details Box -->
+        <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4">
+            
+            <!-- Customer Selection -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Select Customer / Debtor <span class="text-rose-500">*</span>
+                </label>
+                <select name="party_id" id="partySelect" required onchange="handlePartyChange()"
+                    class="w-full text-sm bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <option value="">-- Choose Customer --</option>
+                    {% for p in parties %}
+                    <option value="{{ p.id }}" 
+                        data-state="{{ p.state_code }}" 
+                        data-statename="{{ p.state_name }}"
+                        data-gstin="{{ p.gstin or '' }}"
+                        {% if invoice and invoice.party_id == p.id %}selected{% endif %}>
+                        {{ p.name }} {% if p.gstin %}({{ p.gstin }}){% else %}(Unregistered){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                <div class="text-[11px] text-slate-500 mt-1">
+                    Don't see customer? <a href="/parties/new?type=debtor" target="_blank" class="text-blue-600 hover:underline font-semibold">+ Add New Customer</a>
+                </div>
+            </div>
+
+            <!-- Invoice Number -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Invoice Number <span class="text-rose-500">*</span>
+                </label>
+                <input type="text" name="invoice_number" required 
+                    value="{% if invoice %}{{ invoice.invoice_number }}{% else %}{{ suggested_invoice_no }}{% endif %}"
+                    class="w-full text-sm font-mono bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="text-[11px] text-slate-400 mt-1">Sequential numbering recommended</div>
+            </div>
+
+            <!-- Invoice Date -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Invoice Date <span class="text-rose-500">*</span>
+                </label>
+                <input type="date" name="invoice_date" required 
+                    value="{% if invoice %}{{ invoice.invoice_date }}{% else %}{{ today_date }}{% endif %}"
+                    class="w-full text-sm bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            </div>
+
+            <!-- Place of Supply (POS) -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Place of Supply (POS) <span class="text-rose-500">*</span>
+                </label>
+                <input type="text" name="place_of_supply" id="placeOfSupply" required
+                    value="{% if invoice %}{{ invoice.place_of_supply }}{% else %}{{ active_client.state_code }} - {{ active_client.state_name }}{% endif %}"
+                    class="w-full text-sm bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            </div>
+
+            <!-- Tax Regime Indicator -->
+            <div class="md:col-span-2 flex items-center">
+                <div id="taxRegimeBadge" class="p-3 w-full rounded-lg border text-xs flex items-center justify-between bg-blue-50/50 border-blue-200 text-blue-900">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-calculator text-blue-600"></i>
+                        <span id="taxRegimeText" class="font-semibold">Auto-detecting Intra-State (CGST + SGST) vs Inter-State (IGST)...</span>
+                    </div>
+                    <span id="taxTypeTag" class="px-2 py-0.5 rounded font-bold text-[10px] uppercase bg-blue-200 text-blue-800">INTRA-STATE</span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Items Table Container -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="p-4 bg-slate-50/70 border-b border-slate-200 flex items-center justify-between">
+                <h3 class="font-bold text-slate-800 text-sm flex items-center space-x-2">
+                    <i class="fa-solid fa-list-check text-blue-600"></i>
+                    <span>Items & Services Breakdown</span>
+                </h3>
+                <button type="button" onclick="addItemRow()" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition flex items-center space-x-1">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Add Item Row</span>
+                </button>
+            </div>
+
+            <div class="overflow-x-auto p-4">
+                <table class="w-full text-xs text-left" id="itemsTable">
+                    <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[11px]">
+                        <tr>
+                            <th class="p-2 border border-slate-300 w-8 text-center">#</th>
+                            <th class="p-2 border border-slate-300 min-w-[200px]">Description <span class="text-rose-500">*</span></th>
+                            <th class="p-2 border border-slate-300 w-24">HSN / SAC</th>
+                            <th class="p-2 border border-slate-300 w-16">Qty</th>
+                            <th class="p-2 border border-slate-300 w-20">Unit</th>
+                            <th class="p-2 border border-slate-300 w-24">Rate (₹)</th>
+                            <th class="p-2 border border-slate-300 w-20">Disc %</th>
+                            <th class="p-2 border border-slate-300 w-24 text-right">Taxable (₹)</th>
+                            <th class="p-2 border border-slate-300 w-24">GST %</th>
+                            <th class="p-2 border border-slate-300 w-28 text-right">Total (₹)</th>
+                            <th class="p-2 border border-slate-300 w-10 text-center"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="itemsBody" class="divide-y divide-slate-200">
+                        <!-- Populated by JS / Jinja -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Invoice Totals Summary Block -->
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-col md:flex-row justify-between items-start gap-4">
+                <div class="w-full md:w-1/2 space-y-2">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Terms / Payment Notes</label>
+                    <textarea name="notes" rows="3" placeholder="e.g. Due within 15 days, thank you for your business."
+                        class="w-full text-xs bg-white border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-none">{% if invoice %}{{ invoice.notes or '' }}{% endif %}</textarea>
+                </div>
+
+                <div class="w-full md:w-80 bg-white p-4 rounded-lg border border-slate-200 space-y-2 text-xs">
+                    <div class="flex justify-between text-slate-600">
+                        <span>Total Taxable Amount:</span>
+                        <span class="font-mono font-bold text-slate-900" id="summaryTaxable">₹ 0.00</span>
+                    </div>
+                    <div id="cgstRow" class="flex justify-between text-slate-600">
+                        <span>Central GST (CGST):</span>
+                        <span class="font-mono font-bold text-slate-900" id="summaryCGST">₹ 0.00</span>
+                    </div>
+                    <div id="sgstRow" class="flex justify-between text-slate-600">
+                        <span>State GST (SGST):</span>
+                        <span class="font-mono font-bold text-slate-900" id="summarySGST">₹ 0.00</span>
+                    </div>
+                    <div id="igstRow" class="flex justify-between text-slate-600 hidden">
+                        <span>Integrated GST (IGST):</span>
+                        <span class="font-mono font-bold text-slate-900" id="summaryIGST">₹ 0.00</span>
+                    </div>
+                    <div class="flex justify-between text-slate-600">
+                        <span>Total GST:</span>
+                        <span class="font-mono font-bold text-slate-900" id="summaryTax">₹ 0.00</span>
+                    </div>
+                    <div class="flex justify-between text-slate-600">
+                        <span>Round Off:</span>
+                        <span class="font-mono text-slate-500" id="summaryRoundOff">₹ 0.00</span>
+                    </div>
+                    <div class="flex justify-between pt-2 border-t-2 border-slate-900 text-sm font-black text-slate-900">
+                        <span>GRAND TOTAL:</span>
+                        <span class="font-mono text-blue-900 text-base" id="summaryGrandTotal">₹ 0.00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hidden input for interstate flag -->
+        <input type="hidden" name="is_interstate" id="isInterstateInput" value="0">
+
+        <!-- Form Submission Buttons -->
+        <div class="flex items-center justify-end space-x-3 pt-2">
+            <a href="/sales" class="px-5 py-2.5 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 text-xs font-bold transition">
+                Discard
+            </a>
+            <button type="submit" class="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-md transition flex items-center space-x-2">
+                <i class="fa-solid fa-floppy-disk"></i>
+                <span>{% if invoice %}Save Changes & Update Invoice{% else %}Generate & Save Tax Invoice{% endif %}</span>
+            </button>
+        </div>
+
+    </form>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const CLIENT_STATE_CODE = "{{ active_client.state_code }}";
+    let isInterstate = false;
+
+    // Existing items data for editing
+    const existingItems = {{ existing_items_json|safe if existing_items_json else '[]' }};
+
+    function handlePartyChange() {
+        const partySelect = document.getElementById("partySelect");
+        const selectedOption = partySelect.options[partySelect.selectedIndex];
+        
+        if (!selectedOption || !selectedOption.value) {
+            updateTaxRegime(false);
+            return;
+        }
+
+        const partyState = (selectedOption.dataset.state || "").trim();
+        const partyStateName = selectedOption.dataset.statename || "";
+
+        if (partyState) {
+            document.getElementById("placeOfSupply").value = partyState + " - " + partyStateName;
+            const isDiff = (partyState !== CLIENT_STATE_CODE);
+            updateTaxRegime(isDiff);
+        } else {
+            updateTaxRegime(false);
+        }
+    }
+
+    function updateTaxRegime(interstate) {
+        isInterstate = interstate;
+        document.getElementById("isInterstateInput").value = interstate ? "1" : "0";
+        
+        const badge = document.getElementById("taxRegimeBadge");
+        const text = document.getElementById("taxRegimeText");
+        const tag = document.getElementById("taxTypeTag");
+        const cgstRow = document.getElementById("cgstRow");
+        const sgstRow = document.getElementById("sgstRow");
+        const igstRow = document.getElementById("igstRow");
+
+        if (interstate) {
+            badge.className = "p-3 w-full rounded-lg border text-xs flex items-center justify-between bg-indigo-50 border-indigo-200 text-indigo-900";
+            text.innerHTML = "<strong>Inter-State Supply:</strong> Applying Integrated GST (IGST).";
+            tag.className = "px-2 py-0.5 rounded font-bold text-[10px] uppercase bg-indigo-200 text-indigo-800";
+            tag.innerText = "INTER-STATE (IGST)";
+            cgstRow.classList.add("hidden");
+            sgstRow.classList.add("hidden");
+            igstRow.classList.remove("hidden");
+        } else {
+            badge.className = "p-3 w-full rounded-lg border text-xs flex items-center justify-between bg-blue-50/50 border-blue-200 text-blue-900";
+            text.innerHTML = "<strong>Intra-State Supply:</strong> Applying Central GST (CGST) + State GST (SGST).";
+            tag.className = "px-2 py-0.5 rounded font-bold text-[10px] uppercase bg-blue-200 text-blue-800";
+            tag.innerText = "INTRA-STATE (CGST+SGST)";
+            cgstRow.classList.remove("hidden");
+            sgstRow.classList.remove("hidden");
+            igstRow.classList.add("hidden");
+        }
+
+        calculateAllRows();
+    }
+
+    let rowCounter = 0;
+
+    function addItemRow(data = {}) {
+        rowCounter++;
+        const tbody = document.getElementById("itemsBody");
+        const tr = document.createElement("tr");
+        tr.id = "itemRow_" + rowCounter;
+        tr.className = "hover:bg-slate-50/80 transition";
+
+        tr.innerHTML = `
+            <td class="p-2 border border-slate-300 text-center font-mono text-slate-500 row-idx">${rowCounter}</td>
+            <td class="p-2 border border-slate-300">
+                <input type="text" name="item_description[]" required value="${data.item_description || ''}" placeholder="Product / Service description"
+                    class="w-full p-1.5 bg-slate-50 border border-slate-300 rounded text-xs focus:bg-white focus:outline-none">
+            </td>
+            <td class="p-2 border border-slate-300">
+                <input type="text" name="hsn_sac[]" value="${data.hsn_sac || ''}" placeholder="e.g. 8443"
+                    class="w-full p-1.5 bg-slate-50 border border-slate-300 rounded text-xs font-mono focus:bg-white focus:outline-none">
+            </td>
+            <td class="p-2 border border-slate-300">
+                <input type="number" step="0.01" min="0.01" name="quantity[]" required value="${data.quantity !== undefined ? data.quantity : 1}" oninput="calculateRow(this)"
+                    class="w-full p-1.5 bg-slate-50 border border-slate-300 rounded text-xs font-bold text-center focus:bg-white focus:outline-none">
+            </td>
+            <td class="p-2 border border-slate-300">
+                <select name="unit[]" class="w-full p-1.5 bg-slate-50 border border-slate-300 rounded text-xs focus:bg-white focus:outline-none">
+                    <option value="PCS" ${data.unit === 'PCS' ? 'selected' : ''}>PCS</option>
+                    <option value="NOS" ${data.unit === 'NOS' ? 'selected' : ''}>NOS</option>
+                    <option value="KG" ${data.unit === 'KG' ? 'selected' : ''}>KG</option>
+                    <option value="MTR" ${data.unit === 'MTR' ? 'selected' : ''}>MTR</option>
+                    <option value="BOX" ${data.unit === 'BOX' ? 'selected' : ''}>BOX</option>
+                    <option value="SET" ${data.unit === 'SET' ? 'selected' : ''}>SET</option>
+                    <option value="SERVICES" ${data.unit === 'SERVICES' ? 'selected' : ''}>SERVICES</option>
+                </select>
+            </td>
+            <td class="p-2 border border-slate-300">
+                <input type="number" step="0.01" min="0" name="unit_price[]" required value="${data.unit_price !== undefined ? data.unit_price : '0.00'}" oninput="calculateRow(this)"
+                    class="w-full p-1.5 bg-slate-50 border border-slate-300 rounded text-xs font-mono text-right focus:bg-white focus:outline-none">
+            </td>
+            <td class="p-2 border border-slate-300">
+                <input type="number" step="0.1" min="0" max="100" name="discount_pct[]" value="${data.discount_pct || 0}" oninput="calculateRow(this)"
+                    class="w-full p-1.5 bg-slate-50 border border-slate-300 rounded text-xs text-center focus:bg-white focus:outline-none">
+            </td>
+            <td class="p-2 border border-slate-300 text-right font-mono font-semibold text-slate-800 row-taxable">
+                ₹ 0.00
+            </td>
+            <td class="p-2 border border-slate-300">
+                <select name="gst_rate[]" onchange="calculateRow(this)" class="w-full p-1.5 bg-slate-50 border border-slate-300 rounded text-xs font-semibold focus:bg-white focus:outline-none">
+                    <option value="18" ${data.gst_rate == 18 ? 'selected' : ''}>18%</option>
+                    <option value="12" ${data.gst_rate == 12 ? 'selected' : ''}>12%</option>
+                    <option value="5" ${data.gst_rate == 5 ? 'selected' : ''}>5%</option>
+                    <option value="28" ${data.gst_rate == 28 ? 'selected' : ''}>28%</option>
+                    <option value="0" ${data.gst_rate == 0 ? 'selected' : ''}>0% (Exempt)</option>
+                </select>
+            </td>
+            <td class="p-2 border border-slate-300 text-right font-mono font-bold text-slate-900 row-total">
+                ₹ 0.00
+            </td>
+            <td class="p-2 border border-slate-300 text-center">
+                <button type="button" onclick="removeRow(this)" class="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded" title="Delete Row">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+        calculateRow(tr.querySelector("input[name='quantity[]']"));
+    }
+
+    function removeRow(btn) {
+        const tr = btn.closest("tr");
+        const tbody = document.getElementById("itemsBody");
+        if (tbody.children.length > 1) {
+            tr.remove();
+            renumberRows();
+            calculateAllRows();
+        } else {
+            alert("At least one line item is required.");
+        }
+    }
+
+    function renumberRows() {
+        const rows = document.querySelectorAll("#itemsBody tr");
+        rows.forEach((r, idx) => {
+            r.querySelector(".row-idx").innerText = idx + 1;
+        });
+    }
+
+    function calculateRow(elem) {
+        const tr = elem.closest("tr");
+        const qty = parseFloat(tr.querySelector("input[name='quantity[]']").value) || 0;
+        const rate = parseFloat(tr.querySelector("input[name='unit_price[]']").value) || 0;
+        const disc = parseFloat(tr.querySelector("input[name='discount_pct[]']").value) || 0;
+        const gstRate = parseFloat(tr.querySelector("select[name='gst_rate[]']").value) || 0;
+
+        const baseVal = qty * rate;
+        const taxable = baseVal - (baseVal * (disc / 100));
+        const tax = (taxable * gstRate) / 100;
+        const total = taxable + tax;
+
+        tr.querySelector(".row-taxable").innerText = "₹ " + taxable.toFixed(2);
+        tr.querySelector(".row-total").innerText = "₹ " + total.toFixed(2);
+
+        tr.dataset.taxable = taxable;
+        tr.dataset.gstRate = gstRate;
+        tr.dataset.tax = tax;
+        tr.dataset.total = total;
+
+        updateSummaryTotals();
+    }
+
+    function calculateAllRows() {
+        const rows = document.querySelectorAll("#itemsBody tr");
+        rows.forEach(r => {
+            const input = r.querySelector("input[name='quantity[]']");
+            if (input) calculateRow(input);
+        });
+    }
+
+    function updateSummaryTotals() {
+        let totalTaxable = 0;
+        let totalCgst = 0;
+        let totalSgst = 0;
+        let totalIgst = 0;
+
+        const rows = document.querySelectorAll("#itemsBody tr");
+        rows.forEach(r => {
+            const taxable = parseFloat(r.dataset.taxable) || 0;
+            const gstRate = parseFloat(r.dataset.gstRate) || 0;
+            const tax = parseFloat(r.dataset.tax) || 0;
+
+            totalTaxable += taxable;
+            if (isInterstate) {
+                totalIgst += tax;
+            } else {
+                totalCgst += (tax / 2);
+                totalSgst += (tax / 2);
+            }
+        });
+
+        const totalTax = totalCgst + totalSgst + totalIgst;
+        const rawGrandTotal = totalTaxable + totalTax;
+        const roundedGrandTotal = Math.round(rawGrandTotal);
+        const roundOff = roundedGrandTotal - rawGrandTotal;
+
+        document.getElementById("summaryTaxable").innerText = "₹ " + totalTaxable.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById("summaryCGST").innerText = "₹ " + totalCgst.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById("summarySGST").innerText = "₹ " + totalSgst.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById("summaryIGST").innerText = "₹ " + totalIgst.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById("summaryTax").innerText = "₹ " + totalTax.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById("summaryRoundOff").innerText = "₹ " + roundOff.toFixed(2);
+        document.getElementById("summaryGrandTotal").innerText = "₹ " + roundedGrandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    // Initialize items
+    window.addEventListener("DOMContentLoaded", () => {
+        if (existingItems && existingItems.length > 0) {
+            existingItems.forEach(item => addItemRow(item));
+        } else {
+            addItemRow();
+        }
+        handlePartyChange();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Sales Tax Invoices - {{ active_client.business_name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Sales Tax Invoices</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Manage, print, and track all outward GST invoices issued by {{ active_client.business_name }}</p>
+        </div>
+        <a href="/sales/new" class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm transition">
+            <i class="fa-solid fa-plus mr-1.5"></i> Create New Invoice
+        </a>
+    </div>
+
+    <!-- Filter / Search Toolbar -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3 text-xs">
+        <form method="GET" action="/sales" class="flex flex-wrap items-center gap-2 m-0 w-full sm:w-auto">
+            <input type="text" name="q" value="{{ query_search or '' }}" placeholder="Search Invoice No or Customer..."
+                class="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:outline-none w-48 sm:w-64">
+            <input type="date" name="from_date" value="{{ from_date or '' }}" class="px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs">
+            <span class="text-slate-400">to</span>
+            <input type="date" name="to_date" value="{{ to_date or '' }}" class="px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs">
+            <button type="submit" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-semibold">Filter</button>
+            {% if query_search or from_date or to_date %}
+            <a href="/sales" class="text-slate-500 hover:text-slate-800 underline ml-1">Reset</a>
+            {% endif %}
+        </form>
+
+        <div class="text-slate-500 font-medium">
+            Total Invoices: <span class="font-bold text-slate-900">{{ invoices|length }}</span>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+                <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[11px] border-b border-slate-200">
+                    <tr>
+                        <th class="py-3 px-3">Invoice No</th>
+                        <th class="py-3 px-3">Date</th>
+                        <th class="py-3 px-3">Customer (Debtor)</th>
+                        <th class="py-3 px-3">POS</th>
+                        <th class="py-3 px-3 text-right">Taxable (₹)</th>
+                        <th class="py-3 px-3 text-right">Tax (₹)</th>
+                        <th class="py-3 px-3 text-right">Grand Total (₹)</th>
+                        <th class="py-3 px-3 text-center">Status</th>
+                        <th class="py-3 px-3 text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-slate-700">
+                    {% for inv in invoices %}
+                    <tr class="hover:bg-slate-50/70 transition">
+                        <td class="py-3 px-3 font-mono font-bold">
+                            <a href="/sales/{{ inv.id }}" class="text-blue-600 hover:underline">{{ inv.invoice_number }}</a>
+                        </td>
+                        <td class="py-3 px-3 text-slate-600">{{ inv.invoice_date }}</td>
+                        <td class="py-3 px-3">
+                            <div class="font-semibold text-slate-900">{{ inv.party_name }}</div>
+                            <div class="text-[10px] text-slate-400 font-mono">{{ inv.party_gstin or 'Unregistered' }}</div>
+                        </td>
+                        <td class="py-3 px-3 text-[11px]">
+                            {{ inv.place_of_supply }}
+                            {% if inv.is_interstate %}
+                            <span class="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold">IGST</span>
+                            {% else %}
+                            <span class="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-bold">CGST+SGST</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-3 text-right font-mono text-slate-800">
+                            {{ "{:,.2f}".format(inv.taxable_amount) }}
+                        </td>
+                        <td class="py-3 px-3 text-right font-mono text-slate-600">
+                            {{ "{:,.2f}".format(inv.total_tax) }}
+                        </td>
+                        <td class="py-3 px-3 text-right font-mono font-extrabold text-slate-900">
+                            ₹ {{ "{:,.2f}".format(inv.grand_total) }}
+                        </td>
+                        <td class="py-3 px-3 text-center">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold {% if inv.status == 'paid' %}bg-emerald-100 text-emerald-800{% elif inv.status == 'partially_paid' %}bg-amber-100 text-amber-800{% else %}bg-rose-100 text-rose-800{% endif %}">
+                                {{ inv.status|upper }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-3 text-center">
+                            <div class="flex items-center justify-center space-x-1">
+                                <a href="/sales/{{ inv.id }}/print" title="Print GST Invoice" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded">
+                                    <i class="fa-solid fa-print"></i>
+                                </a>
+                                <a href="/sales/{{ inv.id }}/edit" title="Edit / Correct" class="p-1.5 text-amber-600 hover:bg-amber-50 rounded">
+                                    <i class="fa-solid fa-pen"></i>
+                                </a>
+                                <form method="POST" action="/sales/{{ inv.id }}/delete" onsubmit="return confirm('Are you sure you want to delete invoice {{ inv.invoice_number }}?');" class="inline m-0">
+                                    <button type="submit" title="Delete" class="p-1.5 text-rose-600 hover:bg-rose-50 rounded">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="py-12 text-center text-slate-400">
+                            <i class="fa-solid fa-file-invoice text-3xl mb-2 block text-slate-300"></i>
+                            <span>No sales invoices found.</span>
+                            <div class="mt-2">
+                                <a href="/sales/new" class="text-blue-600 hover:underline font-semibold text-xs">+ Create your first invoice</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

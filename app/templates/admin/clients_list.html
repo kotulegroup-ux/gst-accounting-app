@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Client Management - Admin Console{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
+        <div>
+            <div class="flex items-center space-x-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-amber-500 text-white tracking-wider">ADMINISTRATOR</span>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Client Directory & Multi-Tenancy</h1>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">
+                Manage all registered client businesses, user credentials, and switch accounts to inspect or correct entries.
+            </p>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <a href="/admin/audit-log" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition flex items-center space-x-1.5">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                <span>Audit Logs</span>
+            </a>
+            <a href="/admin/clients/new" class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm transition">
+                <i class="fa-solid fa-user-plus mr-1.5"></i> Register New Client
+            </a>
+        </div>
+    </div>
+
+    <!-- Client Cards / Table -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <div class="font-bold text-slate-800 text-xs uppercase tracking-wider">All Active Client Businesses ({{ clients|length }})</div>
+            <div class="text-[11px] text-slate-500">Click <strong>"Switch / Manage Books"</strong> to view or edit transactions as that client.</div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+                <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[11px] border-b border-slate-200">
+                    <tr>
+                        <th class="py-3 px-3">Client Business</th>
+                        <th class="py-3 px-3">GSTIN & State</th>
+                        <th class="py-3 px-3">Login User ID (Phone/Email)</th>
+                        <th class="py-3 px-3 text-right">Total Sales</th>
+                        <th class="py-3 px-3 text-center">Status</th>
+                        <th class="py-3 px-3 text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-slate-700">
+                    {% for c in clients %}
+                    <tr class="hover:bg-slate-50/80 transition {% if active_client and active_client.id == c.id %}bg-blue-50/40{% endif %}">
+                        <td class="py-3 px-3">
+                            <div class="font-bold text-slate-900 text-sm">{{ c.business_name }}</div>
+                            <div class="text-[11px] text-slate-400">Trade: {{ c.trade_name or 'Same' }} &bull; {{ c.city or '' }}</div>
+                        </td>
+                        <td class="py-3 px-3">
+                            <div class="font-mono font-bold text-slate-800">{{ c.gstin or 'URP (Unregistered)' }}</div>
+                            <div class="text-[11px] text-slate-400">{{ c.state_name }} ({{ c.state_code }})</div>
+                        </td>
+                        <td class="py-3 px-3">
+                            <div class="font-medium text-slate-900"><i class="fa-solid fa-phone text-slate-400 mr-1 text-[10px]"></i> {{ c.phone }}</div>
+                            {% if c.email %}<div class="text-[11px] text-slate-400"><i class="fa-solid fa-envelope text-slate-400 mr-1 text-[10px]"></i> {{ c.email }}</div>{% endif %}
+                            <div class="text-[10px] text-slate-400 mt-0.5">User: <strong class="text-blue-700">{{ c.login_username }}</strong></div>
+                        </td>
+                        <td class="py-3 px-3 text-right font-mono font-bold text-slate-900">
+                            ₹ {{ "{:,.2f}".format(c.total_sales or 0.0) }}
+                            <div class="text-[10px] text-slate-400 font-normal">{{ c.invoices_count or 0 }} Invoices</div>
+                        </td>
+                        <td class="py-3 px-3 text-center">
+                            {% if active_client and active_client.id == c.id %}
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                                ACTIVE NOW
+                            </span>
+                            {% else %}
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                                READY
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-3 text-center">
+                            <div class="flex items-center justify-center space-x-1.5">
+                                <form method="POST" action="/admin/switch-client" class="inline m-0">
+                                    <input type="hidden" name="client_id" value="{{ c.id }}">
+                                    <button type="submit" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-bold shadow-sm transition">
+                                        <i class="fa-solid fa-arrow-right-arrow-left mr-1"></i> Switch
+                                    </button>
+                                </form>
+                                <a href="/admin/clients/{{ c.id }}/edit" class="p-1.5 text-amber-600 hover:bg-amber-50 rounded" title="Edit Client & Password">
+                                    <i class="fa-solid fa-pen"></i>
+                                </a>
+                                <form method="POST" action="/admin/clients/{{ c.id }}/delete" onsubmit="return confirm('WARNING: Deleting client {{ c.business_name }} will remove ALL invoices, purchases, payments, and users for this client. Proceed?');" class="inline m-0">
+                                    <button type="submit" class="p-1.5 text-rose-600 hover:bg-rose-50 rounded" title="Delete Client">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

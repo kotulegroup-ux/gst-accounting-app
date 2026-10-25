@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}{% if party %}Edit Party {{ party.name }}{% else %}New Party (Customer / Supplier){% endif %}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">
+                {% if party %}Edit Party: {{ party.name }}{% else %}Add New Party (Customer / Supplier){% endif %}
+            </h1>
+            <p class="text-xs text-slate-500 mt-0.5">Master party record for invoices, bills, and ledger balances for {{ active_client.business_name }}</p>
+        </div>
+        <a href="/parties" class="text-xs text-slate-500 hover:text-slate-800 font-semibold">
+            <i class="fa-solid fa-arrow-left mr-1"></i> Cancel
+        </a>
+    </div>
+
+    <!-- Main Card -->
+    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <form method="POST" action="{% if party %}/parties/{{ party.id }}/edit{% else %}/parties/new{% endif %}" class="space-y-4">
+
+            <!-- Party Type -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Party Relationship <span class="text-rose-500">*</span>
+                </label>
+                <div class="grid grid-cols-3 gap-3">
+                    <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50 border-slate-300">
+                        <input type="radio" name="party_type" value="debtor" required {% if not party or party.party_type == 'debtor' %}checked{% endif %} class="text-blue-600 focus:ring-blue-500">
+                        <span class="ml-2 text-xs font-bold text-slate-800">Debtor (Customer)</span>
+                    </label>
+                    <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50 border-slate-300">
+                        <input type="radio" name="party_type" value="creditor" required {% if party and party.party_type == 'creditor' %}checked{% endif %} class="text-amber-600 focus:ring-amber-500">
+                        <span class="ml-2 text-xs font-bold text-slate-800">Creditor (Supplier)</span>
+                    </label>
+                    <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50 border-slate-300">
+                        <input type="radio" name="party_type" value="both" required {% if party and party.party_type == 'both' %}checked{% endif %} class="text-purple-600 focus:ring-purple-500">
+                        <span class="ml-2 text-xs font-bold text-slate-800">Both (Customer & Vendor)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Party Legal Name & Trade Name -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Business / Legal Name <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" name="name" required placeholder="e.g. Apex Infotech Pvt Ltd"
+                        value="{% if party %}{{ party.name }}{% endif %}"
+                        class="w-full text-sm bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Trade Name / Brand (Optional)
+                    </label>
+                    <input type="text" name="trade_name" placeholder="e.g. Apex Tech"
+                        value="{% if party %}{{ party.trade_name or '' }}{% endif %}"
+                        class="w-full text-sm bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+            </div>
+
+            <!-- GSTIN & State -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        GSTIN (15 Digits)
+                    </label>
+                    <input type="text" name="gstin" id="gstinInput" maxlength="15" placeholder="e.g. 27ABCDE1234F1Z5" oninput="detectStateFromGSTIN(this.value)"
+                        value="{% if party %}{{ party.gstin or '' }}{% endif %}"
+                        class="w-full text-sm font-mono uppercase bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <div class="text-[11px] text-slate-400 mt-0.5">Leave blank if unregistered</div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        State Code <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" name="state_code" id="stateCodeInput" required placeholder="e.g. 27"
+                        value="{% if party %}{{ party.state_code or '' }}{% else %}{{ active_client.state_code }}{% endif %}"
+                        class="w-full text-sm font-mono bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        State Name <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" name="state_name" id="stateNameInput" required placeholder="e.g. Maharashtra"
+                        value="{% if party %}{{ party.state_name or '' }}{% else %}{{ active_client.state_name }}{% endif %}"
+                        class="w-full text-sm bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+            </div>
+
+            <!-- Address -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Billing / Shipping Address
+                </label>
+                <textarea name="address" rows="2" placeholder="Street, Locality, Area"
+                    class="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">{% if party %}{{ party.address or '' }}{% endif %}</textarea>
+            </div>
+
+            <!-- Contact Phone & Email -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Mobile / Phone Number
+                    </label>
+                    <input type="text" name="phone" placeholder="e.g. 9811122233"
+                        value="{% if party %}{{ party.phone or '' }}{% endif %}"
+                        class="w-full text-sm bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Email Address
+                    </label>
+                    <input type="email" name="email" placeholder="e.g. accounts@party.in"
+                        value="{% if party %}{{ party.email or '' }}{% endif %}"
+                        class="w-full text-sm bg-slate-50 border border-slate-300 rounded-lg p-2.5 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+            </div>
+
+            <!-- Opening Balance -->
+            <div class="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
+                <div class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Opening Ledger Balance (Prior to Software Onboarding)</div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] text-slate-500 mb-1">Opening Amount (₹)</label>
+                        <input type="number" step="0.01" min="0" name="opening_balance" placeholder="0.00"
+                            value="{% if party %}{{ party.opening_balance }}{% else %}0.00{% endif %}"
+                            class="w-full text-sm font-mono bg-white border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-slate-500 mb-1">Balance Nature</label>
+                        <select name="opening_balance_type" class="w-full text-sm bg-white border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <option value="Dr" {% if not party or party.opening_balance_type == 'Dr' %}selected{% endif %}>Debit (Dr) - Party Owes You (Receivable)</option>
+                            <option value="Cr" {% if party and party.opening_balance_type == 'Cr' %}selected{% endif %}>Credit (Cr) - You Owe Party (Payable)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="pt-4 flex items-center justify-end space-x-3 border-t border-slate-100">
+                <a href="/parties" class="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50">Cancel</a>
+                <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-md flex items-center space-x-1.5">
+                    <i class="fa-solid fa-check"></i>
+                    <span>{% if party %}Update Party Master{% else %}Save New Party{% endif %}</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const GST_CODES = {
+        "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh",
+        "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
+        "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur",
+        "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal",
+        "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh",
+        "24": "Gujarat", "26": "Dadra & Nagar Haveli and Daman & Diu", "27": "Maharashtra",
+        "29": "Karnataka", "30": "Goa", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry",
+        "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh"
+    };
+
+    function detectStateFromGSTIN(gstin) {
+        if (!gstin || gstin.trim().length < 2) return;
+        const code = gstin.trim().substring(0, 2);
+        if (GST_CODES[code]) {
+            document.getElementById("stateCodeInput").value = code;
+            document.getElementById("stateNameInput").value = GST_CODES[code];
+        }
+    }
+</script>
+{% endblock %}

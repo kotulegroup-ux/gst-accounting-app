@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Trail & Activity Log - Admin Console{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div>
+            <div class="flex items-center space-x-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-amber-500 text-white tracking-wider">AUDIT TRAIL</span>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">System Modifications & Corrections Log</h1>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">
+                Chronological record of all additions, updates, corrections, and deletions made across all client accounts.
+            </p>
+        </div>
+        <a href="/admin/clients" class="text-xs text-slate-500 hover:text-slate-800 font-semibold">
+            <i class="fa-solid fa-arrow-left mr-1"></i> Back to Clients
+        </a>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+                <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[11px] border-b border-slate-200">
+                    <tr>
+                        <th class="py-3 px-3">Timestamp</th>
+                        <th class="py-3 px-3">User</th>
+                        <th class="py-3 px-3">Action</th>
+                        <th class="py-3 px-3">Entity Type</th>
+                        <th class="py-3 px-3">Entity Ref</th>
+                        <th class="py-3 px-3">Correction / Change Details</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-slate-700">
+                    {% for l in logs %}
+                    <tr class="hover:bg-slate-50/70 transition">
+                        <td class="py-3 px-3 font-mono text-slate-500">{{ l.timestamp }}</td>
+                        <td class="py-3 px-3 font-semibold text-slate-900">{{ l.user_name }}</td>
+                        <td class="py-3 px-3">
+                            {% if l.action == 'CREATE' %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">CREATE</span>
+                            {% elif l.action == 'UPDATE' %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">UPDATE</span>
+                            {% elif l.action == 'DELETE' %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">DELETE</span>
+                            {% else %}
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800">{{ l.action }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-3 font-bold uppercase text-slate-700">{{ l.entity_type }}</td>
+                        <td class="py-3 px-3 font-mono font-semibold text-blue-700">#{{ l.entity_id }}</td>
+                        <td class="py-3 px-3 text-slate-600">{{ l.details }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="py-8 text-center text-slate-400 italic">No audit records logged yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
